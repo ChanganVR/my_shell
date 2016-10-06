@@ -22,6 +22,6 @@ public:
 	void parse(string& cmd);
 	void trim_front(string &cmd);
 	string get_token(string& cmd);
-	string get_argv(string& cmd, char** & argv, int & argc);
+	string get_argv(string &cmd, string &exec_name, char **&argv, int &argc);
 };
 #endif

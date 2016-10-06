@@ -13,6 +13,9 @@ enum Status{
 	Done
 };
 
+#define WRITE_END 1
+#define READ_END 0
+
 typedef struct{
 	int pid;
 	string name;
@@ -21,7 +24,7 @@ typedef struct{
 } Process;
 
 typedef struct{
-	int gpid = 0;
+	int pgid = 0;
 	string name;
 	bool foreground;
 	list<Process> process_list;
@@ -36,7 +39,7 @@ private:
 public:
 	JobManager() {}
 	void launch_job(Job& job);
-	void launch_process(Process& process, pid_t gpid, int infile, int outfile, int errfile);
+	void launch_process(Process &process, pid_t pgid, int infile, int outfile, int errfile, bool foreground);
 	void exec_bg(string& cmd);
 	void exec_fg(string& cmd);
 	void exec_jobs(string& cmd);

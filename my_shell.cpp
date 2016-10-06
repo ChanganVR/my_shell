@@ -1,12 +1,35 @@
 #include "parser.h"
 #include <iostream>
+#include <signal.h>
+#include <unistd.h>
+#include <termios.h>
 
 using namespace std;
 
 int main()
 {
 	//initial the shell
-	//check wheher interactive
+    //ignore the signal interrupting shell
+    signal (SIGINT, SIG_IGN);
+    signal (SIGQUIT, SIG_IGN);
+    signal (SIGTSTP, SIG_IGN);
+    signal (SIGTTIN, SIG_IGN);
+    signal (SIGTTOU, SIG_IGN);
+    signal (SIGCHLD, SIG_IGN);
+
+	int shell_pid = getpid();
+	if(setpgid(shell_pid, shell_pid) < 0)
+	{
+		perror("set shell in its own process group");
+	}
+	//get control of the terminal
+	if(tcsetpgrp(STDIN_FILENO, shell_pid) < 0)
+	{
+		perror("Setting shell foreground process group fails");
+	}
+	struct termios terminal_backup;
+	tcgetattr(STDIN_FILENO, &terminal_backup);
+	//check whether interactive
 
 	JobManager job_manager;
 	Parser parser(job_manager);

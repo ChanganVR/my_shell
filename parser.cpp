@@ -1,5 +1,4 @@
 #include "parser.h"
-#include <assert.h>
 #include <cstring>
 #include <iostream>
 #include "JobManager.h"
@@ -36,7 +35,7 @@ void Parser::parse(string& cmd)
 			process.name = get_token(cmd);
 			if(job.name.empty())
 				break;
-			string next = get_argv(cmd, process.argv, process.argc);
+			string next = get_argv(cmd, job.name, process.argv, process.argc);
 			job.process_list.push_back(process);
 			if(next == "&")
 			{
@@ -59,14 +58,18 @@ void Parser::parse(string& cmd)
 }
 
 
-string Parser::get_argv(string& cmd, char**& argv, int & argc)
+string Parser::get_argv(string &cmd, string &exec_name, char **&argv, int &argc)
 {
 	string next = get_token(cmd);
 	list<string> arg_list;
+    //the executable name should be the first parameter
+	arg_list.push_back(exec_name);
 	if(next.empty() || next == "&" || next == "|")
 	{
-		argv = NULL;
-		argc = 0;
+		argc = 1;
+		argv = new char*[argc];
+		argv[0] = new char[exec_name.size() + 1];
+		std::strcpy(argv[0], exec_name.c_str());
 		return next;
 	}
 	else

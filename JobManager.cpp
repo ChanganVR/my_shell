@@ -2,8 +2,6 @@
 #include <unistd.h>
 #include <iostream>
 #include <signal.h>
-#include <unistd.h>
-
 
 void JobManager::exec_cd(string & cmd)
 {
@@ -40,38 +38,50 @@ void JobManager::launch_job(Job& job)
 
     //fd[0] for reading, fd[1] for writing
     int fd[2], infile, outfile, errfile;
-    errfile = stderr;
+    errfile = STDERR_FILENO;
     job_list_.push_back(job);
+    infile = STDIN_FILENO;
     for(auto process = job.process_list.begin(); process != job.process_list.end(); process++)
     {
-        if(process == job.process_list.begin())
-            infile = stdin;
+        if(process == std::prev(job.process_list.end()))
+            outfile = STDOUT_FILENO;
         else
         {
-            if(pipe(fd) == -1)
+            if (pipe(fd) == -1)
             {
                 perror("pipe");
                 exit(1);
-            }
-            infile = fd[1];
+            } else
+                outfile = fd[WRITE_END];
         }
-        if(process == job.process_list.end())
-            outfile = stdout;
-        else
-            outfile = fd[0];
 
         pid_t  pid = fork();
-        if(pid == 0)
-            launch_process(*process, job.gpid, infile, outfile, errfile);
-        else
+        if(pid == 0)//child process
+            launch_process(*process, job.pgid, infile, outfile, errfile, job.foreground);
+        else if (pid < 0)
         {
-
+            perror("fork");
+            exit(1);
         }
+        else//parent process
+        {
+            (*process).pid = pid;
+            if(job.pgid == 0)
+                setpgid(pid, (*process).pid);
+            if(infile != STDIN_FILENO)
+                close(infile);
+            if(outfile != STDOUT_FILENO)
+                close(outfile);
+            //set input for next process
+            infile = fd[READ_END];
+        }
+        if(job.foreground && process == job.process_list.begin())
+            tcsetpgrp(STDIN_FILENO, job.pgid);
     }
 
 }
 
-void JobManager::launch_process(Process &process, pid_t gpid, int infile, int outfile, int errfile)
+void JobManager::launch_process(Process &process, pid_t pgid, int infile, int outfile, int errfile, bool foreground)
 {
     //reset signals
     signal (SIGINT, SIG_DFL);
@@ -81,7 +91,37 @@ void JobManager::launch_process(Process &process, pid_t gpid, int infile, int ou
     signal (SIGTTOU, SIG_DFL);
     signal (SIGCHLD, SIG_DFL);
 
+    //set pgid if current process is in a pipe
     pid_t pid = getpid();
-    if(gpid == 0)
-        setgpid(pid, gpid);
+    if(pgid == 0)
+        setpgid(pid, pgid);
+    //since child process inherits from parent shell process, so STDIN_FILENO is terminal input
+    if(foreground)
+    {
+        if(tcsetpgrp(STDIN_FILENO, pid) < 0)
+        {
+            perror("Setting child process foreground process group fails");
+            //exit(1);
+        }
+    }
+
+    //set stdin, stdout and stderr
+    if(infile != STDIN_FILENO)
+    {
+        dup2(infile, STDIN_FILENO);
+        close(infile);
+    }
+    if(outfile != STDOUT_FILENO)
+    {
+        dup2(outfile, STDOUT_FILENO);
+        close(outfile);
+    }
+    if(errfile != STDERR_FILENO)
+    {
+        dup2(errfile, STDERR_FILENO);
+        close(errfile);
+    }
+
+    //execute program
+    execvp(process.name.c_str(), process.argv);
 }
