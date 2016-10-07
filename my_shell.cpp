@@ -6,6 +6,8 @@
 
 using namespace std;
 
+struct termios terminal_backup;
+
 int main()
 {
 	//initial the shell
@@ -25,9 +27,9 @@ int main()
 	//get control of the terminal
 	if(tcsetpgrp(STDIN_FILENO, shell_pid) < 0)
 	{
+		cout << "tcsetpgrp(shell) fail" <<endl;
 		perror("Setting shell foreground process group fails");
 	}
-	struct termios terminal_backup;
 	tcgetattr(STDIN_FILENO, &terminal_backup);
 	//check whether interactive
 

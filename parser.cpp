@@ -35,7 +35,7 @@ void Parser::parse(string& cmd)
 			process.name = get_token(cmd);
 			if(job.name.empty())
 				break;
-			string next = get_argv(cmd, job.name, process.argv, process.argc);
+			string next = get_argv(cmd, process.name, process.argv, process.argc);
 			job.process_list.push_back(process);
 			if(next == "&")
 			{
@@ -52,6 +52,7 @@ void Parser::parse(string& cmd)
 			else
 			 	throw(new ParseError("Error:There is some error in your command!"));
 		}
+		job_manager_.check_job_status();
 		job_manager_.launch_job(job);
 	}
 
