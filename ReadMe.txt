@@ -1,40 +1,17 @@
-========================================================================
-    CONSOLE APPLICATION : my_shell Project Overview
-========================================================================
+This is assignment 1 part 2 of CMPT 300
 
-AppWizard has created this my_shell application for you.
+Source files include JobManager.cpp JobManager.h my_shell.cpp parser.cpp parser.h makefile
 
-This file contains a summary of what you will find in each of the files that
-make up your my_shell application.
+To run my_shell, first enter the directory that includes all above files and then enter "make & ./my_shell"
 
+Features of this shell:
+1. internal commands including cd, pwd, exit, jobs, bg, fg
+2. external commands with parameters
+3. multiple commands connected by the pipe
+4. foreground and background job control
 
-my_shell.vcxproj
-    This is the main project file for VC++ projects generated using an Application Wizard.
-    It contains information about the version of Visual C++ that generated the file, and
-    information about the platforms, configurations, and project features selected with the
-    Application Wizard.
+Author: Changan Chen  301324036   cca278@sfu.ca
 
-my_shell.vcxproj.filters
-    This is the filters file for VC++ projects generated using an Application Wizard. 
-    It contains information about the association between the files in your project 
-    and the filters. This association is used in the IDE to show grouping of files with
-    similar extensions under a specific node (for e.g. ".cpp" files are associated with the
-    "Source Files" filter).
-
-my_shell.cpp
-    This is the main application source file.
-
-/////////////////////////////////////////////////////////////////////////////
-Other standard files:
-
-StdAfx.h, StdAfx.cpp
-    These files are used to build a precompiled header (PCH) file
-    named my_shell.pch and a precompiled types file named StdAfx.obj.
-
-/////////////////////////////////////////////////////////////////////////////
-Other notes:
-
-AppWizard uses "TODO:" comments to indicate parts of the source code you
-should add to or customize.
-
-/////////////////////////////////////////////////////////////////////////////
+Acknowledges:
+gnu manual
+cmu lab 4 - implementing a shell job control

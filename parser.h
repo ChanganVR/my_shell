@@ -15,7 +15,6 @@ public:
 
 class Parser {
 private:
-	list<string> cmd_list_;
 	JobManager job_manager_;
 public:
 	Parser(JobManager & job_manager):job_manager_(job_manager){}

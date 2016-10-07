@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <wait.h>
 #include <assert.h>
-#include <signal.h>
 #include <termios.h>
 #include <iostream>
 
@@ -32,7 +31,7 @@ void JobManager::exec_bg()
         shared_ptr<Job> job = *std::prev(job_list_.end());
         if(job->status == Stopped)
         {
-            //send continue signal
+            //send continue signal to stopped child process
             put_job_in_background(job, true);
         }
         else if(job->status == Running)
@@ -72,6 +71,7 @@ void JobManager::put_job_in_background(shared_ptr<Job> job, bool con)
 
 void JobManager::put_job_in_foreground(shared_ptr<Job> job, bool con)
 {
+    //set child process group id in terminal
     tcsetpgrp(STDIN_FILENO, job->pgid);
     if(con)
     {
@@ -82,6 +82,7 @@ void JobManager::put_job_in_foreground(shared_ptr<Job> job, bool con)
     job->foreground = true;
     wait_for_job(job);
     pid_t  shell_pid = getpid();
+    //reset shell process group id in terminal
     tcsetpgrp(STDIN_FILENO, shell_pid);
     tcsetattr (STDIN_FILENO, TCSADRAIN, &terminal_backup);
 }
@@ -93,8 +94,6 @@ void JobManager::exec_jobs()
     int job_num = 1;
     for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_num++)
     {
-//        cout << "pid: " + to_string((*std::prev((*job)->process_list.end()))->pid) <<endl;
-        //only print not running and stopped jobs
         if((*job)->status != Terminated)
             print_job_status(*job, job_num);
     }
@@ -107,16 +106,6 @@ void JobManager::exec_exit()
 
 void JobManager::launch_job(shared_ptr<Job> job)
 {
-    //parser test
-//    for (auto iter =job.process_list.begin();iter!=job.process_list.end();iter++)
-//    {
-//        std::cout << (*iter).name << std::endl;
-//        for (int i =0;i<(*iter).argc;i++)
-//        {
-//            std::cout << (*iter).argv[i] << std::endl;
-//        }
-//    }
-
     //fd[0] for reading, fd[1] for writing
     int fd[2], infile, outfile, errfile;
     errfile = STDERR_FILENO;
@@ -211,13 +200,15 @@ void JobManager::launch_process(shared_ptr<Process> process, pid_t pgid, int inf
 
     //execute program
     execvp(process->name.c_str(), process->argv);
+    perror("launch child process");
+    exit(1);
 }
 
 void JobManager::exec_pwd()
 {
     char dir[1024];
     if (getcwd(dir, sizeof(dir)) != NULL)
-        cout << ("current directory:" + string(dir)) <<endl;
+        cout << (string(dir)) <<endl;
     else
         perror("getcwd() error");
 }
@@ -264,8 +255,6 @@ void JobManager::wait_for_job(shared_ptr<Job> job)
     {
         //wait status change(stopped, terminated) of all child process, save status and return pid
         pid = waitpid(WAIT_ANY, &status, WUNTRACED);
-//        cout <<status<<endl;
-//        cout << pid <<endl;
         //stopping or terminating fg process is same as doing that with job, but need to update the information
         int completed_process_pgid = update_job_status(pid, status);
         //wait until current job stopped or terminated or one process in current job completed
@@ -296,7 +285,7 @@ int JobManager::update_job_status(pid_t pid, int status)
                 {
                     //process normally terminated
                     (*process)->completed = true;
-                    //if process is the last element of job, then job is terminated
+                    //if process is the last process of job, then job is terminated
                     if((*job)->process_list.size() != 0 && std::prev((*job)->process_list.end()) == process)
                     {
                         (*job)->status = Done;
@@ -372,10 +361,10 @@ void JobManager::print_job_status(shared_ptr<Job> job, int job_num)
         case Done: status_info = "Done";
             break;
     }
-    string ending = "";
+    string ending = "\x1b[0m";
     if(job->foreground == false && job->status == Running)
         ending = "&";
-    cout << "[" + to_string(job_num) + "]\t" + status_info + "\t\t\t" + job->name + ending<<endl;
+    cout << "\x1b[31m[" + to_string(job_num) + "]\t" + status_info + "\t\t\t" + job->name + ending<<endl;
 }
 
 

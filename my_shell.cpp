@@ -20,7 +20,6 @@ int main()
     //signal (SIGCHLD, SIG_IGN);//when child process stopped or terminated
 
 	int shell_pid = getpid();
-//    cout << shell_pid <<endl;
 	if(setpgid(shell_pid, shell_pid) < 0)
 	{
 		perror("set shell in its own process group");
@@ -31,16 +30,20 @@ int main()
 		cout << "tcsetpgrp(shell) fail" <<endl;
 		perror("Setting shell foreground process group fails");
 	}
+    //save current terminal parameters
 	tcgetattr(STDIN_FILENO, &terminal_backup);
-	//check whether interactive
 
+	char *user_name = getenv("USER");
+	char *host_name = new char[30];
+	gethostname(host_name, 30);
+	string prompt = string(user_name) + "@" + host_name + ":";
 	JobManager job_manager;
 	Parser parser(job_manager);
 	bool running = true;
 	while (running)
 	{
 		string cmd;
-		cout<<"Enter your command" << endl;
+		cout<<"\x1b[34m" + prompt + "\x1b[0m" ;
 		getline(cin, cmd);
 		try {
 			parser.parse(cmd);

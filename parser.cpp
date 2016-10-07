@@ -1,9 +1,6 @@
 #include "parser.h"
 #include <cstring>
 #include <iostream>
-#include <memory>
-#include "JobManager.h"
-
 
 void Parser::parse(string& cmd)
 {
@@ -55,6 +52,7 @@ void Parser::parse(string& cmd)
 			else
 			 	throw(new ParseError("Error:There is some error in your command!"));
 		}
+        //check whether there is some job status change and update the job list
 		job_manager_.check_job_status();
 		job_manager_.launch_job(job);
 	}
@@ -96,6 +94,7 @@ string Parser::get_argv(string &cmd, string &exec_name, char **&argv, int &argc)
 
 }
 
+//get token in a string using separator blank
 std::string Parser::get_token(string& cmd)
 {
 	trim_front(cmd);
@@ -114,6 +113,7 @@ std::string Parser::get_token(string& cmd)
 	return token;
 }
 
+//wipe off the blanks in the head of a string
 void Parser::trim_front(string &cmd)
 {
 	for (auto iter = cmd.begin(); iter != cmd.end();)
@@ -126,6 +126,7 @@ void Parser::trim_front(string &cmd)
 
 }
 
+//wipe off the blanks at the end of a string
 void Parser::trim_end(string &cmd)
 {
 	if(cmd.size() == 0)

@@ -16,7 +16,7 @@ enum Status{
 
 #define WRITE_END 1
 #define READ_END 0
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 typedef struct{
 	int pid;
