@@ -267,23 +267,24 @@ void JobManager::wait_for_job(shared_ptr<Job> job)
 //        cout <<status<<endl;
 //        cout << pid <<endl;
         //stopping or terminating fg process is same as doing that with job, but need to update the information
-        update_job_status(pid, status);
-        //when current job stopped or terminated, return
-        if(job->status == Stopped || job->status == Terminated)
+        int completed_process_pgid = update_job_status(pid, status);
+        //wait until current job stopped or terminated or one process in current job completed
+        if(job->status == Stopped || job->status == Terminated || job->pgid == completed_process_pgid)
             break;
     }
 }
 
-bool JobManager::update_job_status(pid_t pid, int status)
+//ret: -1 means no status update, 0 means successful update, positive is the completed process pgid
+int JobManager::update_job_status(pid_t pid, int status)
 {
     int job_num = 1;
     //no child process to report, specified by WNOHANG
     if(pid == 0)
-        return false;
+        return -1;
     else if(pid == -1)
     {
         perror("waitpid");
-        return false;
+        return -1;
     }
     for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_num++)
     {
@@ -304,7 +305,7 @@ bool JobManager::update_job_status(pid_t pid, int status)
                     }
                     else
                         (*job)->status = Running;
-                    return true;
+                    return (*job)->pgid;
                 }
                 if (WIFSIGNALED(status))
                 {
@@ -313,14 +314,14 @@ bool JobManager::update_job_status(pid_t pid, int status)
                     (*job)->status = Terminated;
                     print_job_status(*job, job_num);
 //                    cerr << (*job)->name + " is terminated by signal";
-                    return true;
+                    return 0;
                 }
                 if (WIFSTOPPED(status))
                 {
                     (*process)->completed = false;
                     (*job)->status = Stopped;
                     print_job_status(*job, job_num);
-                    return true;
+                    return 0;
                 }
             }
         }
@@ -337,8 +338,8 @@ void JobManager::check_job_status()
         //return if process stopped or terminated, or no process
         pid = waitpid (WAIT_ANY, &status, WNOHANG|WUNTRACED);
         if(pid == -1)
-            pid = 0;//the way WNOHANG returns
-        if(!update_job_status(pid, status))//No job is updated
+            pid = 0; //the way WNOHANG returns
+        if(update_job_status(pid, status) == -1)//No job is updated
             break;
     }
 }

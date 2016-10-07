@@ -48,7 +48,7 @@ public:
     bool exec_internal_cmd(shared_ptr<Process> process);
 	void check_job_status();//To see whether some job is terminated
     void wait_for_job(shared_ptr<Job> job);
-	bool update_job_status(pid_t pid, int status);
+	int update_job_status(pid_t pid, int status);
 	void put_job_in_background(shared_ptr<Job> job, bool con);
 	void put_job_in_foreground(shared_ptr<Job> job, bool con);
 	void exec_bg();
