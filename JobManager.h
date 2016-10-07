@@ -29,30 +29,29 @@ typedef struct{
 	int pgid = 0;
 	string name;
 	bool foreground;
-	list<Process> process_list;
+	list<shared_ptr<Process>> process_list;
 	Status status;
 } Job;
 
 
 class JobManager {
 private:
-	list<Job> job_list_;
-	shared_ptr<Job*> last_job;
+	list<shared_ptr<Job>> job_list_;
 public:
 	JobManager() {}
-	void launch_job(Job& job);
-	void launch_process(Process &process, pid_t pgid, int infile, int outfile, int errfile, bool foreground);
-    bool check_internal_cmd(Process &process);
+	void launch_job(shared_ptr<Job> job);
+	void launch_process(shared_ptr<Process> process, pid_t pgid, int infile, int outfile, int errfile, bool foreground);
+    bool check_internal_cmd(shared_ptr<Process> process);
 	void check_job_status();//To see whether some job is terminated
-    void wait_for_job(Job &job);
+    void wait_for_job(shared_ptr<Job> job);
 	bool update_job_status(pid_t pid, int status);
-	void put_job_in_background(Job& job, bool con);
-	void put_job_in_foreground(Job& job, bool con);
-	void exec_bg(Process &process);
-	void exec_fg(Process &process);
-	void exec_jobs(Process &process);
+	void put_job_in_background(shared_ptr<Job> job, bool con);
+	void put_job_in_foreground(shared_ptr<Job> job, bool con);
+	void exec_bg();
+	void exec_fg();
+	void exec_jobs();
 	void exec_exit();
-	void exec_cd(Process &process);
+	void exec_cd(string & dir);
 	void exec_pwd();
 };
 

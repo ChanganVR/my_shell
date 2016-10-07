@@ -20,6 +20,7 @@ int main()
     signal (SIGCHLD, SIG_IGN);
 
 	int shell_pid = getpid();
+    cout << shell_pid <<endl;
 	if(setpgid(shell_pid, shell_pid) < 0)
 	{
 		perror("set shell in its own process group");

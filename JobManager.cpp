@@ -8,9 +8,9 @@
 
 extern struct termios terminal_backup;
 
-void JobManager::exec_cd(Process &process)
+void JobManager::exec_cd(string & dir)
 {
-    if(chdir(process.argv[1]) < 0)
+    if(chdir(dir.c_str()) < 0)
     {
         perror("cd");
     }
@@ -23,56 +23,56 @@ void JobManager::exec_cd(Process &process)
 #endif
 }
 
-void JobManager::exec_bg(Process &process)
+void JobManager::exec_bg()
 {
     if(job_list_.size() == 0)
         cerr << "No such job now";
     else
     {
-        Job job = *std::prev(job_list_.end());
-        if(job.status == Stopped)
+        shared_ptr<Job> job = *std::prev(job_list_.end());
+        if(job->status == Stopped)
         {
             //send continue signal
             put_job_in_background(job, true);
         }
-        else if(job.status == Running)
+        else if(job->status == Running)
             cerr << "job already in background";
         else
             assert(1);
     }
 }
 
-void JobManager::exec_fg(Process &process)
+void JobManager::exec_fg()
 {
     if(job_list_.size() == 0)
         cerr << "No such job now";
     else
     {
-        Job job = *std::prev(job_list_.end());
-        if(job.status == Stopped)
+        shared_ptr<Job> job = *std::prev(job_list_.end());
+        if(job->status == Stopped)
             put_job_in_foreground(job, true);
-        else if(job.status == Running)
+        else if(job->status == Running)
             put_job_in_foreground(job, false);
         else
             assert(1);
     }
 }
 
-void JobManager::put_job_in_background(Job &job, bool con)
+void JobManager::put_job_in_background(shared_ptr<Job> job, bool con)
 {
     if(con)
     {
-        if(kill(job.pgid, SIGCONT)<0)
+        if(kill(job->pgid, SIGCONT)<0)
             perror("kill(SIGCONT");
     }
 }
 
-void JobManager::put_job_in_foreground(Job &job, bool con)
+void JobManager::put_job_in_foreground(shared_ptr<Job> job, bool con)
 {
-    tcsetpgrp(STDIN_FILENO, job.pgid);
+    tcsetpgrp(STDIN_FILENO, job->pgid);
     if(con)
     {
-        if(kill(job.pgid, SIGCONT)<0)
+        if(kill(job->pgid, SIGCONT)<0)
             perror("kill(SIGCONT");
     }
     wait_for_job(job);
@@ -82,14 +82,14 @@ void JobManager::put_job_in_foreground(Job &job, bool con)
 }
 
 
-void JobManager::exec_jobs(Process &process)
+void JobManager::exec_jobs()
 {
     //TODO:jobs with parameters
     int job_count = 1;
     for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_count++)
     {
         string status_info;
-        switch ((*job).status)
+        switch ((*job)->status)
         {
             case Stopped: status_info = "Stopped";
                 break;
@@ -98,7 +98,7 @@ void JobManager::exec_jobs(Process &process)
             case Terminated: status_info = "Terminated";
                 break;
         }
-        cout << "[" + to_string(job_count) + "]  " + status_info + "   " + (*job).name <<endl;
+        cout << "[" + to_string(job_count) + "]  " + status_info + "   " + (*job)->name <<endl;
     }
 }
 
@@ -107,7 +107,7 @@ void JobManager::exec_exit()
     exit(EXIT_SUCCESS);
 }
 
-void JobManager::launch_job(Job& job)
+void JobManager::launch_job(shared_ptr<Job> job)
 {
     //parser test
 //    for (auto iter =job.process_list.begin();iter!=job.process_list.end();iter++)
@@ -124,13 +124,13 @@ void JobManager::launch_job(Job& job)
     errfile = STDERR_FILENO;
     job_list_.push_back(job);
     infile = STDIN_FILENO;
-    for(auto process = job.process_list.begin(); process != job.process_list.end(); process++)
+    for(auto process = job->process_list.begin(); process != job->process_list.end(); process++)
     {
         //internal command, don't fork(), infile for next process is still stdin
         if(check_internal_cmd((*process)))
             continue;
         //external command
-        if (process == std::prev(job.process_list.end()))
+        if (process == std::prev(job->process_list.end()))
             outfile = STDOUT_FILENO;
         else {
             if (pipe(fd) == -1) {
@@ -142,17 +142,17 @@ void JobManager::launch_job(Job& job)
 
         pid_t pid = fork();
         if (pid == 0)//child process
-            launch_process(*process, job.pgid, infile, outfile, errfile, job.foreground);
+            launch_process(*process, job->pgid, infile, outfile, errfile, job->foreground);
         else if (pid < 0)
         {
             perror("fork");
             exit(1);
         } else//parent process
         {
-            (*process).pid = pid;
-            if (job.pgid == 0)
-                job.pgid = pid;
-            setpgid(pid, job.pgid);
+            (*process)->pid = pid;
+            if (job->pgid == 0)
+                job->pgid = pid;
+            setpgid(pid, job->pgid);
             if (infile != STDIN_FILENO)
                 close(infile);
             if (outfile != STDOUT_FILENO)
@@ -160,14 +160,15 @@ void JobManager::launch_job(Job& job)
             //set input for next process
             infile = fd[READ_END];
         }
-        if (job.foreground)
+        if (job->foreground)
             put_job_in_foreground(job, false);
         else
             put_job_in_background(job, false);
     }
 }
 
-void JobManager::launch_process(Process &process, pid_t pgid, int infile, int outfile, int errfile, bool foreground)
+void JobManager::launch_process(shared_ptr<Process> process, pid_t pgid, int infile, int outfile, int errfile,
+                                bool foreground)
 {
     //reset signals
     signal (SIGINT, SIG_DFL);
@@ -209,7 +210,7 @@ void JobManager::launch_process(Process &process, pid_t pgid, int infile, int ou
     }
 
     //execute program
-    execvp(process.name.c_str(), process.argv);
+    execvp(process->name.c_str(), process->argv);
 }
 
 void JobManager::exec_pwd()
@@ -221,27 +222,28 @@ void JobManager::exec_pwd()
         perror("getcwd() error");
 }
 
-bool JobManager::check_internal_cmd(Process &process)
+bool JobManager::check_internal_cmd(shared_ptr<Process> process)
 {
+    string dir(process->argv[0]);
     //TODO:check whether there is extra argv
-    if((process).name == "cd")
-        exec_cd(process);
-    else if((process).name == "exit")
+    if((process)->name == "cd")
+        exec_cd(dir);
+    else if((process)->name == "exit")
         exec_exit();
-    else if((process).name == "jobs")
-        exec_jobs(process);
-    else if((process).name == "bg")
-        exec_bg(process);
-    else if((process).name == "fg")
-        exec_fg(process);
-    else if((process).name == "pwd")
+    else if((process)->name == "jobs")
+        exec_jobs();
+    else if((process)->name == "bg")
+        exec_bg();
+    else if((process)->name == "fg")
+        exec_fg();
+    else if((process)->name == "pwd")
         exec_pwd();
     else
         return false;
     return true;
 }
 
-void JobManager::wait_for_job(Job &job)
+void JobManager::wait_for_job(shared_ptr<Job> job)
 {
     int status;
     pid_t  pid;
@@ -252,7 +254,7 @@ void JobManager::wait_for_job(Job &job)
         //stopping or terminating fg process is same as doing that with job, but need to update the information
         update_job_status(pid, status);
         //when current job stopped or terminated, return
-        if(job.status == Stopped || job.status == Terminated)
+        if(job->status == Stopped || job->status == Terminated)
             break;
     }
 }
@@ -261,29 +263,33 @@ bool JobManager::update_job_status(pid_t pid, int status)
 {
     for(auto job = job_list_.begin(); job != job_list_.end(); job++)
     {
-        for (auto process = (*job).process_list.begin(); process != (*job).process_list.end(); process++)
+        for (auto process = (*job)->process_list.begin(); process != (*job)->process_list.end(); process++)
         {
-            if ((*process).pid == pid)
+            if ((*process)->pid == pid)
             {
                 if (WIFEXITED(status))
                 {
                     //process normally terminated
-                    (*process).completed = true;
-                    (*job).status = Running;
+                    (*process)->completed = true;
+                    //if process is the last element of job, then job is terminated
+                    if((*job)->process_list.size() != 0 && std::prev((*job)->process_list.end()) == process)
+                        (*job)->status = Terminated;
+                    else
+                        (*job)->status = Running;
                     return true;
                 }
                 if (WIFSIGNALED(status))
                 {
                     //terminated by a signal
-                    (*process).completed = false;
-                    (*job).status = Terminated;
-                    cerr << (*job).name + " is terminated by signal";
+                    (*process)->completed = false;
+                    (*job)->status = Terminated;
+                    cerr << (*job)->name + " is terminated by signal";
                     return true;
                 }
                 if (WIFSTOPPED(status))
                 {
-                    (*process).completed = false;
-                    (*job).status = Stopped;
+                    (*process)->completed = false;
+                    (*job)->status = Stopped;
                     return true;
                 }
             }

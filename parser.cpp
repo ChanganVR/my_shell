@@ -1,6 +1,7 @@
 #include "parser.h"
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include "JobManager.h"
 
 
@@ -27,26 +28,26 @@ void Parser::parse(string& cmd)
 	}
 	else
 	{
-		Job job;
-		job.name = cmd;
+		shared_ptr<Job> job(new Job);
+		job->name = cmd;
 		while(1)
 		{
-			Process process;
-			process.name = get_token(cmd);
-			if(job.name.empty())
+			shared_ptr<Process> process(new Process);
+			process->name = get_token(cmd);
+			if(job->name.empty())
 				break;
-			string next = get_argv(cmd, process.name, process.argv, process.argc);
-			job.process_list.push_back(process);
+			string next = get_argv(cmd, process->name, process->argv, process->argc);
+			job->process_list.push_back(process);
 			if(next == "&")
 			{
-				job.foreground = false;
+				job->foreground = false;
 				break;
 			}
 			else if(next == "|")
 				continue;
 			else if(next.empty())
 			{
-				job.foreground = true;
+				job->foreground = true;
 				break;
 			}
 			else
