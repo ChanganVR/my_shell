@@ -1,3 +1,5 @@
 CMakeLists.txt
 my_shell
 /.idea
+count.c
+count

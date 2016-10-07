@@ -10,7 +10,8 @@ using namespace std;
 enum Status{
 	Stopped,
 	Running,
-   	Terminated//either from the "running" state by completing its execution or by explicitly being killed
+   	Terminated,//either from the "running" state by completing its execution or by explicitly being killed
+	Done
 };
 
 #define WRITE_END 1
@@ -21,6 +22,7 @@ typedef struct{
 	int pid;
 	string name;
 	bool completed = false;
+	bool external;
  	char** argv;
 	int argc;
 } Process;
@@ -41,7 +43,9 @@ public:
 	JobManager() {}
 	void launch_job(shared_ptr<Job> job);
 	void launch_process(shared_ptr<Process> process, pid_t pgid, int infile, int outfile, int errfile, bool foreground);
-    bool check_internal_cmd(shared_ptr<Process> process);
+	bool check_internal_cmd(shared_ptr<Job> job);
+	void print_job_status(shared_ptr<Job> job, int job_num);
+    bool exec_internal_cmd(shared_ptr<Process> process);
 	void check_job_status();//To see whether some job is terminated
     void wait_for_job(shared_ptr<Job> job);
 	bool update_job_status(pid_t pid, int status);

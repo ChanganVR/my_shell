@@ -85,20 +85,13 @@ void JobManager::put_job_in_foreground(shared_ptr<Job> job, bool con)
 void JobManager::exec_jobs()
 {
     //TODO:jobs with parameters
-    int job_count = 1;
-    for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_count++)
+    int job_num = 1;
+    for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_num++)
     {
-        string status_info;
-        switch ((*job)->status)
-        {
-            case Stopped: status_info = "Stopped";
-                break;
-            case Running: status_info = "Stopped";
-                break;
-            case Terminated: status_info = "Terminated";
-                break;
-        }
-        cout << "[" + to_string(job_count) + "]  " + status_info + "   " + (*job)->name <<endl;
+//        cout << "pid: " + to_string((*std::prev((*job)->process_list.end()))->pid) <<endl;
+        //only print not running and stopped jobs
+        if((*job)->status != Terminated)
+            print_job_status(*job, job_num);
     }
 }
 
@@ -122,12 +115,14 @@ void JobManager::launch_job(shared_ptr<Job> job)
     //fd[0] for reading, fd[1] for writing
     int fd[2], infile, outfile, errfile;
     errfile = STDERR_FILENO;
-    job_list_.push_back(job);
+    //exclude pure internal cmd
+    if(!check_internal_cmd(job))
+        job_list_.push_back(job);
     infile = STDIN_FILENO;
     for(auto process = job->process_list.begin(); process != job->process_list.end(); process++)
     {
         //internal command, don't fork(), infile for next process is still stdin
-        if(check_internal_cmd((*process)))
+        if(exec_internal_cmd((*process)))
             continue;
         //external command
         if (process == std::prev(job->process_list.end()))
@@ -172,11 +167,11 @@ void JobManager::launch_process(shared_ptr<Process> process, pid_t pgid, int inf
 {
     //reset signals
     signal (SIGINT, SIG_DFL);
-    signal (SIGQUIT, SIG_DFL);
+//    signal (SIGQUIT, SIG_DFL);
     signal (SIGTSTP, SIG_DFL);
-    signal (SIGTTIN, SIG_DFL);
-    signal (SIGTTOU, SIG_DFL);
-    signal (SIGCHLD, SIG_DFL);
+//    signal (SIGTTIN, SIG_DFL);
+//    signal (SIGTTOU, SIG_DFL);
+//    signal (SIGCHLD, SIG_DFL);
 
     //set pgid if current process is in a pipe
     pid_t pid = getpid();
@@ -222,12 +217,22 @@ void JobManager::exec_pwd()
         perror("getcwd() error");
 }
 
-bool JobManager::check_internal_cmd(shared_ptr<Process> process)
+bool JobManager::exec_internal_cmd(shared_ptr<Process> process)
 {
-    string dir(process->argv[0]);
     //TODO:check whether there is extra argv
     if((process)->name == "cd")
-        exec_cd(dir);
+    {
+        if(process->argv[1] == NULL)
+        {
+            cerr << "path is not specified" << endl;
+            return false;
+        }
+        else
+        {
+            string dir(process->argv[1]);
+            exec_cd(dir);
+        }
+    }
     else if((process)->name == "exit")
         exec_exit();
     else if((process)->name == "jobs")
@@ -239,7 +244,10 @@ bool JobManager::check_internal_cmd(shared_ptr<Process> process)
     else if((process)->name == "pwd")
         exec_pwd();
     else
+    {
+        process->external = true;
         return false;
+    }
     return true;
 }
 
@@ -251,6 +259,8 @@ void JobManager::wait_for_job(shared_ptr<Job> job)
     {
         //wait status change(stopped, terminated) of all child process, save status and return pid
         pid = waitpid(WAIT_ANY, &status, WUNTRACED);
+//        cout <<status<<endl;
+//        cout << pid <<endl;
         //stopping or terminating fg process is same as doing that with job, but need to update the information
         update_job_status(pid, status);
         //when current job stopped or terminated, return
@@ -261,7 +271,16 @@ void JobManager::wait_for_job(shared_ptr<Job> job)
 
 bool JobManager::update_job_status(pid_t pid, int status)
 {
-    for(auto job = job_list_.begin(); job != job_list_.end(); job++)
+    int job_num = 1;
+    //no child process to report, specified by WNOHANG
+    if(pid == 0)
+        return false;
+    else if(pid == -1)
+    {
+        perror("waitpid");
+        return false;
+    }
+    for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_num++)
     {
         for (auto process = (*job)->process_list.begin(); process != (*job)->process_list.end(); process++)
         {
@@ -273,7 +292,11 @@ bool JobManager::update_job_status(pid_t pid, int status)
                     (*process)->completed = true;
                     //if process is the last element of job, then job is terminated
                     if((*job)->process_list.size() != 0 && std::prev((*job)->process_list.end()) == process)
+                    {
+                        (*job)->status = Done;
+                        print_job_status(*job, job_num);
                         (*job)->status = Terminated;
+                    }
                     else
                         (*job)->status = Running;
                     return true;
@@ -283,6 +306,7 @@ bool JobManager::update_job_status(pid_t pid, int status)
                     //terminated by a signal
                     (*process)->completed = false;
                     (*job)->status = Terminated;
+                    print_job_status(*job, job_num);
                     cerr << (*job)->name + " is terminated by signal";
                     return true;
                 }
@@ -290,13 +314,13 @@ bool JobManager::update_job_status(pid_t pid, int status)
                 {
                     (*process)->completed = false;
                     (*job)->status = Stopped;
+                    print_job_status(*job, job_num);
                     return true;
                 }
             }
         }
     }
-    //no process id is matched
-    return false;
+    assert(1);
 }
 
 void JobManager::check_job_status()
@@ -306,10 +330,40 @@ void JobManager::check_job_status()
     while(1)
     {
         //return if process stopped or terminated, or no process
-        pid = waitpid (WAIT_ANY, &status, WUNTRACED|WNOHANG);
+        pid = waitpid (WAIT_ANY, &status, WNOHANG|WUNTRACED);
+        if(pid == -1)
+            pid = 0;//the way WNOHANG returns
         if(!update_job_status(pid, status))//No job is updated
             break;
     }
+}
+
+bool JobManager::check_internal_cmd(shared_ptr<Job> job)
+{
+    //check pure internal command, that is one job only has one internal command
+    auto process = job->process_list.begin();
+    if(job->process_list.size() == 1 && ((*process)->name == "cd" || (*process)->name == "exit" ||
+        (*process)->name == "bg" || (*process)->name == "fg" || (*process)->name == "jobs" || (*process)->name == "pwd"))
+        return true;
+    else
+        return false;
+}
+
+void JobManager::print_job_status(shared_ptr<Job> job, int job_num)
+{
+    string status_info;
+    switch (job->status)
+    {
+        case Stopped: status_info = "Stopped";
+            break;
+        case Running: status_info = "Stopped";
+            break;
+        case Terminated: status_info = "Terminated";
+            break;
+        case Done: status_info = "Done";
+            break;
+    }
+    cout << "[" + to_string(job_num) + "]\t" + status_info + "\t" + job->name <<endl;
 }
 
 
