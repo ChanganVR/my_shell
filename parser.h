@@ -21,6 +21,7 @@ public:
 	Parser(JobManager & job_manager):job_manager_(job_manager){}
 	void parse(string& cmd);
 	void trim_front(string &cmd);
+    void trim_end(string &cmd);
 	string get_token(string& cmd);
 	string get_argv(string &cmd, string &exec_name, char **&argv, int &argc);
 };

@@ -41,6 +41,8 @@ void Parser::parse(string& cmd)
 			if(next == "&")
 			{
 				job->foreground = false;
+                job->name.erase(job->name.begin() + job->name.find('&'));
+				trim_end(job->name);
 				break;
 			}
 			else if(next == "|")
@@ -122,4 +124,18 @@ void Parser::trim_front(string &cmd)
 			iter = cmd.erase(iter);
 	}
 
+}
+
+void Parser::trim_end(string &cmd)
+{
+	if(cmd.size() == 0)
+		return;
+	else
+		for(auto iter = std::prev(cmd.end());iter >= cmd.begin(); iter--)
+		{
+			if(*iter == ' ')
+				iter =cmd.erase(iter);
+			else
+				break;
+		}
 }

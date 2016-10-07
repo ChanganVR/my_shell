@@ -49,6 +49,7 @@ void JobManager::exec_fg()
     else
     {
         shared_ptr<Job> job = *std::prev(job_list_.end());
+        cout<< job->name <<endl;
         if(job->status == Stopped)
             put_job_in_foreground(job, true);
         else if(job->status == Running)
@@ -65,6 +66,8 @@ void JobManager::put_job_in_background(shared_ptr<Job> job, bool con)
         if(kill(job->pgid, SIGCONT)<0)
             perror("kill(SIGCONT");
     }
+    job->status = Running;
+    job->foreground = false;
 }
 
 void JobManager::put_job_in_foreground(shared_ptr<Job> job, bool con)
@@ -75,6 +78,8 @@ void JobManager::put_job_in_foreground(shared_ptr<Job> job, bool con)
         if(kill(job->pgid, SIGCONT)<0)
             perror("kill(SIGCONT");
     }
+    job->status = Running;
+    job->foreground = true;
     wait_for_job(job);
     pid_t  shell_pid = getpid();
     tcsetpgrp(STDIN_FILENO, shell_pid);
@@ -307,7 +312,7 @@ bool JobManager::update_job_status(pid_t pid, int status)
                     (*process)->completed = false;
                     (*job)->status = Terminated;
                     print_job_status(*job, job_num);
-                    cerr << (*job)->name + " is terminated by signal";
+//                    cerr << (*job)->name + " is terminated by signal";
                     return true;
                 }
                 if (WIFSTOPPED(status))
@@ -351,19 +356,25 @@ bool JobManager::check_internal_cmd(shared_ptr<Job> job)
 
 void JobManager::print_job_status(shared_ptr<Job> job, int job_num)
 {
+    //don't print when process is in foreground
+    if(job->foreground && job->status != Stopped)
+        return;
     string status_info;
     switch (job->status)
     {
         case Stopped: status_info = "Stopped";
             break;
-        case Running: status_info = "Stopped";
+        case Running: status_info = "Running";
             break;
         case Terminated: status_info = "Terminated";
             break;
         case Done: status_info = "Done";
             break;
     }
-    cout << "[" + to_string(job_num) + "]\t" + status_info + "\t" + job->name <<endl;
+    string ending = "";
+    if(job->foreground == false && job->status == Running)
+        ending = "&";
+    cout << "[" + to_string(job_num) + "]\t" + status_info + "\t\t\t" + job->name + ending<<endl;
 }
 
 
