@@ -24,38 +24,49 @@ void JobManager::exec_cd(string & dir)
 
 void JobManager::exec_bg()
 {
-    if(job_list_.size() == 0)
-        cerr << "No such job now";
-    else
+    //find the last not terminated job in job list
+    auto last_not_terminated = job_list_.rbegin();
+    for(; last_not_terminated != job_list_.rend(); last_not_terminated++)
     {
-        shared_ptr<Job> job = *std::prev(job_list_.end());
-        if(job->status == Stopped)
-        {
-            //send continue signal to stopped child process
-            put_job_in_background(job, true);
-        }
-        else if(job->status == Running)
-            cerr << "job already in background";
-        else
-            assert(1);
+        if((*last_not_terminated)->status != Terminated)
+            break;
     }
+    //all jobs are terminated or no job in job list
+    if(last_not_terminated == job_list_.rend())
+        cout << "No such job now";
+    shared_ptr<Job> job = *last_not_terminated;
+    if(job->status == Stopped)
+    {
+        //send continue signal to stopped child process
+        put_job_in_background(job, true);
+    }
+    else if(job->status == Running)
+        cerr << "job already in background";
+    else
+        assert(1);
 }
 
 void JobManager::exec_fg()
 {
-    if(job_list_.size() == 0)
-        cerr << "No such job now";
-    else
+    //find the last not terminated job in job list
+    auto last_not_terminated = job_list_.rbegin();
+    for(; last_not_terminated != job_list_.rend(); last_not_terminated++)
     {
-        shared_ptr<Job> job = *std::prev(job_list_.end());
-        cout<< job->name <<endl;
-        if(job->status == Stopped)
-            put_job_in_foreground(job, true);
-        else if(job->status == Running)
-            put_job_in_foreground(job, false);
-        else
-            assert(1);
+        if((*last_not_terminated)->status != Terminated)
+            break;
     }
+    //all jobs are terminated or no job in job list
+    if(last_not_terminated == job_list_.rend())
+        cout << "No such job now";
+    shared_ptr<Job> job = *last_not_terminated;
+    cout<< job->name <<endl;
+    if(job->status == Stopped)
+        put_job_in_foreground(job, true);
+    else if(job->status == Running)
+        put_job_in_foreground(job, false);
+    else
+        assert(1);
+
 }
 
 void JobManager::put_job_in_background(shared_ptr<Job> job, bool con)
@@ -161,11 +172,11 @@ void JobManager::launch_process(shared_ptr<Process> process, pid_t pgid, int inf
 {
     //reset signals
     signal (SIGINT, SIG_DFL);
-//    signal (SIGQUIT, SIG_DFL);
+    signal (SIGQUIT, SIG_DFL);
     signal (SIGTSTP, SIG_DFL);
-//    signal (SIGTTIN, SIG_DFL);
-//    signal (SIGTTOU, SIG_DFL);
-//    signal (SIGCHLD, SIG_DFL);
+    signal (SIGTTIN, SIG_DFL);
+    signal (SIGTTOU, SIG_DFL);
+    signal (SIGCHLD, SIG_DFL);
 
     //set pgid if current process is in a pipe
     pid_t pid = getpid();

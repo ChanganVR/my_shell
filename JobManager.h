@@ -11,7 +11,7 @@ enum Status{
 	Stopped,
 	Running,
    	Terminated,//either from the "running" state by completing its execution or by explicitly being killed
-	Done
+	Done//only usd when a job normally finish
 };
 
 #define WRITE_END 1

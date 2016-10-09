@@ -69,9 +69,10 @@ string Parser::get_argv(string &cmd, string &exec_name, char **&argv, int &argc)
 	if(next.empty() || next == "&" || next == "|")
 	{
 		argc = 1;
-		argv = new char*[argc];
+		argv = new char*[argc + 1];
 		argv[0] = new char[exec_name.size() + 1];
 		std::strcpy(argv[0], exec_name.c_str());
+        argv[1] = NULL;
 		return next;
 	}
 	else
@@ -82,13 +83,14 @@ string Parser::get_argv(string &cmd, string &exec_name, char **&argv, int &argc)
 			next = get_token(cmd);
 		}
 		argc = arg_list.size();
-		argv = new char*[argc];
+		argv = new char*[argc + 1];
 		int i = 0;
 		for (auto str = arg_list.begin(); str != arg_list.end(); str++, i++)
 		{
 			argv[i] = new char[(*str).size() + 1];
 			std::strcpy(argv[i], (*str).c_str());
 		}
+		argv[i] = NULL;
 		return next;
 	}
 
