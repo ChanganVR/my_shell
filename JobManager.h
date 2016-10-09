@@ -37,7 +37,8 @@ typedef struct{
 
 class JobManager {
 private:
-	list<shared_ptr<Job>> job_list_;
+	list<shared_ptr<Job>> job_list_;//only stores background jobs
+	shared_ptr<Job> current_job_;//current foreground job
 public:
 	JobManager() {}
 	void launch_job(shared_ptr<Job> job);
@@ -50,8 +51,8 @@ public:
 	int update_job_status(pid_t pid, int status);
 	void put_job_in_background(shared_ptr<Job> job, bool con);
 	void put_job_in_foreground(shared_ptr<Job> job, bool con);
-	void exec_bg();
-	void exec_fg();
+	void exec_bg(int job_num);
+	void exec_fg(int job_num);
 	void exec_jobs();
 	void exec_exit();
 	void exec_cd(string & dir);

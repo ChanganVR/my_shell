@@ -22,19 +22,32 @@ void JobManager::exec_cd(string & dir)
 #endif
 }
 
-void JobManager::exec_bg()
+void JobManager::exec_bg(int job_num)
 {
-    //find the last not terminated job in job list
-    auto last_not_terminated = job_list_.rbegin();
-    for(; last_not_terminated != job_list_.rend(); last_not_terminated++)
+    shared_ptr<Job> job;
+    if(job_num == 0)
     {
-        if((*last_not_terminated)->status != Terminated)
-            break;
+        //find the last not terminated job in job list
+        auto last_not_terminated = job_list_.rbegin();
+        for(; last_not_terminated != job_list_.rend(); last_not_terminated++)
+        {
+            if((*last_not_terminated)->status != Terminated)
+                break;
+        }
+        //all jobs are terminated or no job in job list
+        if(last_not_terminated == job_list_.rend())
+        {
+            cout << "No such job now";
+            return;
+        }
+        job = *last_not_terminated;
+    } else
+    {
+        auto iter = job_list_.begin();
+        std::advance(iter, job_num - 1);
+        job = *iter;
     }
-    //all jobs are terminated or no job in job list
-    if(last_not_terminated == job_list_.rend())
-        cout << "No such job now";
-    shared_ptr<Job> job = *last_not_terminated;
+
     if(job->status == Stopped)
     {
         //send continue signal to stopped child process
@@ -46,19 +59,33 @@ void JobManager::exec_bg()
         assert(1);
 }
 
-void JobManager::exec_fg()
+void JobManager::exec_fg(int job_num)
 {
-    //find the last not terminated job in job list
-    auto last_not_terminated = job_list_.rbegin();
-    for(; last_not_terminated != job_list_.rend(); last_not_terminated++)
+    shared_ptr<Job> job;
+    if(job_num == 0)
     {
-        if((*last_not_terminated)->status != Terminated)
-            break;
+        //find the last not terminated job in job list
+        auto last_not_terminated = job_list_.rbegin();
+        for(; last_not_terminated != job_list_.rend(); last_not_terminated++)
+        {
+            if((*last_not_terminated)->status != Terminated)
+                break;
+        }
+        //all jobs are terminated or no job in job list
+        if(last_not_terminated == job_list_.rend())
+        {
+            cout << "No such job now";
+            return;
+        }
+        job = *last_not_terminated;
+    } else
+    {
+        auto iter = job_list_.begin();
+        std::advance(iter, job_num - 1);
+        job = *iter;
     }
-    //all jobs are terminated or no job in job list
-    if(last_not_terminated == job_list_.rend())
-        cout << "No such job now";
-    shared_ptr<Job> job = *last_not_terminated;
+
+    current_job_ = job;
     cout<< job->name <<endl;
     if(job->status == Stopped)
         put_job_in_foreground(job, true);
@@ -117,6 +144,7 @@ void JobManager::exec_exit()
 
 void JobManager::launch_job(shared_ptr<Job> job)
 {
+    current_job_ = job;
     //internal cmd is used alone
     bool is_internal_cmd = check_internal_cmd(job);
     if(is_internal_cmd)
@@ -126,8 +154,11 @@ void JobManager::launch_job(shared_ptr<Job> job)
         exec_internal_cmd(*job->process_list.begin());
         return;
     }
-    else
+    if(!job->foreground)//if job runs on background, add it to the bg job list
+    {
         job_list_.push_back(job);
+        cout << "\x1b[31m[" + to_string(job_list_.size()) + "]\t" + job->name + "\x1b[0m" << endl;
+    }
 
     //initialize file descriptor
     int fd[2], infile, outfile, errfile;
@@ -257,9 +288,23 @@ bool JobManager::exec_internal_cmd(shared_ptr<Process> process)
     else if((process)->name == "jobs")
         exec_jobs();
     else if((process)->name == "bg")
-        exec_bg();
+    {
+        int job_num;
+        if(process->argv[1] == NULL)
+            job_num = 0;
+        else
+            stoi(string(process->argv[1]));
+        exec_bg(job_num);
+    }
     else if((process)->name == "fg")
-        exec_fg();
+    {
+        int job_num;
+        if(process->argv[1] == NULL)
+            job_num = 0;
+        else
+            stoi(string(process->argv[1]));
+        exec_fg(job_num);
+    }
     else if((process)->name == "pwd")
         exec_pwd();
     else
@@ -275,17 +320,24 @@ void JobManager::wait_for_job(shared_ptr<Job> job)
         //wait status change(stopped, terminated) of all child process, save status and return pid
         pid = waitpid(WAIT_ANY, &status, WUNTRACED);
         //stopping or terminating fg process is same as doing that with job, but need to update the information
-        update_job_status(pid, status);
+        int foreground_process = update_job_status(pid, status);
         //wait until current job stopped or terminated or one process in current job completed
-        if(job->status == Stopped || job->status == Terminated)
+        if(job->status == Stopped || job->status == Terminated || foreground_process)
             break;
     }
 }
 
-//return value: -1 means no status update, 0 means successful update, positive is the completed process pgid
+//return value: -1 means no status update, 0 means successful update, 1 means foreground process finish
 int JobManager::update_job_status(pid_t pid, int status)
 {
     int job_num = 1;
+    //check whether current job is in the background job list
+    bool current_in_background = false;
+    for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_num++)
+    {
+        if((*job)->pgid == current_job_->pgid)
+            current_in_background = true;
+    }
     //no child process to report, specified by WNOHANG
     if(pid == 0)
         return -1;
@@ -294,6 +346,14 @@ int JobManager::update_job_status(pid_t pid, int status)
         perror("waitpid");
         return -1;
     }
+    else if(!current_in_background && WIFSTOPPED(status))
+    {
+        job_list_.push_back(current_job_);
+        current_job_->foreground = false;
+        current_job_->status = Stopped;
+        return 0;
+    }
+    job_num = 1;
     for(auto job = job_list_.begin(); job != job_list_.end(); job++, job_num++)
     {
         for (auto process = (*job)->process_list.begin(); process != (*job)->process_list.end(); process++)
@@ -334,7 +394,7 @@ int JobManager::update_job_status(pid_t pid, int status)
             }
         }
     }
-    assert(1);
+    return 1;//foreground process, not in the list
 }
 
 void JobManager::check_job_status()
@@ -385,5 +445,4 @@ void JobManager::print_job_status(shared_ptr<Job> job, int job_num)
         ending = "&";
     cout << "\x1b[31m[" + to_string(job_num) + "]\t" + status_info + "\t\t\t" + job->name + ending + "\x1b[0m"<<endl;
 }
-
 
