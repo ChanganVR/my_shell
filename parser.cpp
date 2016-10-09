@@ -4,6 +4,8 @@
 
 void Parser::parse(string& cmd)
 {
+    if(cmd.empty())
+        return;
     //preprocess the cmd
 	for (auto iter = cmd.begin(); iter != cmd.end();iter++)
 	{

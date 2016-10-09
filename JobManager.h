@@ -22,7 +22,6 @@ typedef struct{
 	int pid;
 	string name;
 	bool completed = false;
-	bool external;
  	char** argv;
 	int argc;
 } Process;

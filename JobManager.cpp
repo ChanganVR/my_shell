@@ -117,19 +117,25 @@ void JobManager::exec_exit()
 
 void JobManager::launch_job(shared_ptr<Job> job)
 {
-    //fd[0] for reading, fd[1] for writing
+    //internal cmd is used alone
+    bool is_internal_cmd = check_internal_cmd(job);
+    if(is_internal_cmd)
+    {
+        if(job->process_list.size() > 1)
+            cerr << "internal commands should be used alone";
+        exec_internal_cmd(*job->process_list.begin());
+        return;
+    }
+    else
+        job_list_.push_back(job);
+
+    //initialize file descriptor
     int fd[2], infile, outfile, errfile;
     errfile = STDERR_FILENO;
-    //exclude pure internal cmd
-    if(!check_internal_cmd(job))
-        job_list_.push_back(job);
     infile = STDIN_FILENO;
+    //launch all processes in current and connect their pipes
     for(auto process = job->process_list.begin(); process != job->process_list.end(); process++)
     {
-        //internal command, don't fork(), infile for next process is still stdin
-        if(exec_internal_cmd((*process)))
-            continue;
-        //external command
         if (process == std::prev(job->process_list.end()))
             outfile = STDOUT_FILENO;
         else {
@@ -142,7 +148,13 @@ void JobManager::launch_job(shared_ptr<Job> job)
 
         pid_t pid = fork();
         if (pid == 0)//child process
-            launch_process(*process, job->pgid, infile, outfile, errfile, job->foreground);
+        {
+            //only last process in a job can control the terminal
+            if(process == std::prev(job->process_list.end()))
+                launch_process(*process, job->pgid, infile, outfile, errfile, job->foreground);
+            else
+                launch_process(*process, job->pgid, infile, outfile, errfile, false);
+        }
         else if (pid < 0)
         {
             perror("fork");
@@ -160,11 +172,11 @@ void JobManager::launch_job(shared_ptr<Job> job)
             //set input for next process
             infile = fd[READ_END];
         }
-        if (job->foreground)
-            put_job_in_foreground(job, false);
-        else
-            put_job_in_background(job, false);
     }
+    if (job->foreground)
+        put_job_in_foreground(job, false);
+    else
+        put_job_in_background(job, false);
 }
 
 void JobManager::launch_process(shared_ptr<Process> process, pid_t pgid, int infile, int outfile, int errfile,
@@ -211,7 +223,7 @@ void JobManager::launch_process(shared_ptr<Process> process, pid_t pgid, int inf
 
     //execute program
     execvp(process->name.c_str(), process->argv);
-    perror("launch child process");
+    cerr << process->name << ": command not found" << endl;
     exit(1);
 }
 
@@ -251,11 +263,7 @@ bool JobManager::exec_internal_cmd(shared_ptr<Process> process)
     else if((process)->name == "pwd")
         exec_pwd();
     else
-    {
-        process->external = true;
-        return false;
-    }
-    return true;
+        false;
 }
 
 void JobManager::wait_for_job(shared_ptr<Job> job)
@@ -267,14 +275,14 @@ void JobManager::wait_for_job(shared_ptr<Job> job)
         //wait status change(stopped, terminated) of all child process, save status and return pid
         pid = waitpid(WAIT_ANY, &status, WUNTRACED);
         //stopping or terminating fg process is same as doing that with job, but need to update the information
-        int completed_process_pgid = update_job_status(pid, status);
+        update_job_status(pid, status);
         //wait until current job stopped or terminated or one process in current job completed
-        if(job->status == Stopped || job->status == Terminated || job->pgid == completed_process_pgid)
+        if(job->status == Stopped || job->status == Terminated)
             break;
     }
 }
 
-//ret: -1 means no status update, 0 means successful update, positive is the completed process pgid
+//return value: -1 means no status update, 0 means successful update, positive is the completed process pgid
 int JobManager::update_job_status(pid_t pid, int status)
 {
     int job_num = 1;
@@ -372,10 +380,10 @@ void JobManager::print_job_status(shared_ptr<Job> job, int job_num)
         case Done: status_info = "Done";
             break;
     }
-    string ending = "\x1b[0m";
-    if(job->foreground == false && job->status == Running)
+    string ending;
+    if(job->foreground == false)
         ending = "&";
-    cout << "\x1b[31m[" + to_string(job_num) + "]\t" + status_info + "\t\t\t" + job->name + ending<<endl;
+    cout << "\x1b[31m[" + to_string(job_num) + "]\t" + status_info + "\t\t\t" + job->name + ending + "\x1b[0m"<<endl;
 }
 
 
